@@ -1,0 +1,238 @@
+class Patient
+types
+    public PatientID = token; -- Identificador único del paciente
+    public Status = <WAITING> | <IN_TREATMENT> | <DISCHARGED>; -- Estado del paciente
+
+instance variables
+    patientID: PatientID;
+    name: seq of char;
+    age: nat;
+    status: Status;
+
+operations
+    public Patient: PatientID * seq of char * nat ==> Patient
+    Patient(pid, pname, page) ==
+    (
+        patientID := pid;
+        name := pname;
+        age := page;
+        status := <WAITING>;
+    );
+
+    public updateStatus: Status ==> ()
+    updateStatus(newStatus) ==
+    (
+        status := newStatus;
+    );
+    public getPatientId : () ==> PatientID
+    getPatientId() ==
+    (
+        return patientID;
+    );
+end Patient
+
+class DialysisMachine
+types
+    public MachineID = token; -- Identificador único de la máquina
+    public Status = <AVAILABLE> | <IN_USE> | <MAINTENANCE>; -- Estados de la máquina
+    public Mode = <TREATMENT> | <CLEANING> | <DIAGNOSTIC>; -- Modos de operación
+    public Parameters ::
+        heparinLevel: real
+        bloodConductivity: real
+        arterialPressure: real
+        dialysateTemperature: real
+        bloodFlowRate: real;
+
+instance variables
+    machineID: MachineID;
+    status: Status;
+    mode: Mode;
+    assignedPatient: [Patient`PatientID]; -- Paciente asignado a la máquina
+    parameters: Parameters;
+
+operations
+    public DialysisMachine: MachineID ==> DialysisMachine
+    DialysisMachine(mid) ==
+    (
+        machineID := mid;
+        status := <AVAILABLE>;
+        mode := <DIAGNOSTIC>;
+        assignedPatient := nil;
+        parameters := mk_Parameters(0.0, 0.0, 0.0, 0.0, 0.0);
+    );
+
+    public assignPatient: Patient`PatientID ==> ()
+    assignPatient(pid) ==
+    (
+        assignedPatient := pid;
+        status := <IN_USE>;
+    );
+
+    public unassignPatient: () ==> ()
+    unassignPatient() ==
+    (
+        assignedPatient := nil;
+        status := <AVAILABLE>;
+    );
+
+    public setParameters: Parameters ==> ()
+    setParameters(p) ==
+    (
+        parameters := p;
+    );
+
+    public monitorParameters: () ==> seq of char
+    monitorParameters() ==
+    (
+        if parameters.arterialPressure < 60 or parameters.arterialPressure > 120 then
+            return "ALERTA: Presión arterial fuera de rango";
+        if parameters.dialysateTemperature < 35 or parameters.dialysateTemperature > 39 then
+            return "ALERTA: Temperatura de dializado fuera de rango";
+        if parameters.bloodFlowRate < 300 or parameters.bloodFlowRate > 400 then
+            return "ALERTA: Flujo sanguíneo fuera de rango";
+        return "Parámetros dentro del rango";
+    );
+
+    public resetMachine: () ==> ()
+    resetMachine() ==
+    (
+        status := <AVAILABLE>;
+        mode := <DIAGNOSTIC>;
+        parameters := mk_Parameters(0.0, 0.0, 0.0, 0.0, 0.0);
+    );
+
+    public getMachineId : () ==> MachineID
+    getMachineId() ==
+    (
+        return machineID;
+    );
+end DialysisMachine
+
+class TreatmentSession
+types
+    public SessionID = token; -- Identificador único de la sesión
+    public Phase = <PREPARATION> | <INITIATION> | <FINALIZATION>;
+    public Status = <PENDING> | <ONGOING> | <COMPLETED>;
+
+instance variables
+    sessionID: SessionID;
+    patientID: Patient`PatientID;
+    machineID: DialysisMachine`MachineID;
+    phase: Phase;
+    status: Status;
+
+operations
+    public TreatmentSession: SessionID * Patient`PatientID * DialysisMachine`MachineID ==> TreatmentSession
+    TreatmentSession(sid, pid, mid) ==
+    (
+        sessionID := sid;
+        patientID := pid;
+        machineID := mid;
+        phase := <PREPARATION>;
+        status := <PENDING>;
+    );
+
+    public startSession: () ==> ()
+    startSession() ==
+    (
+        phase := <INITIATION>;
+        status := <ONGOING>;
+    );
+
+    public finalizeSession: () ==> ()
+    finalizeSession() ==
+    (
+        phase := <FINALIZATION>;
+        status := <COMPLETED>;
+    );
+end TreatmentSession
+
+class Alarm
+types
+    public AlarmID = token;
+    public AlarmType = <PRESSURE_ERROR> | <TEMPERATURE_ERROR> | <FLOW_ERROR>;
+    public AlarmStatus = <ACTIVE> | <RESOLVED>;
+
+instance variables
+    alarmID: AlarmID;
+    alarmType: AlarmType;
+    status: AlarmStatus;
+
+operations
+    public Alarm: AlarmID * AlarmType ==> Alarm
+    Alarm(aid, atype) ==
+    (
+        alarmID := aid;
+        alarmType := atype;
+        status := <ACTIVE>;
+    );
+
+    public resolveAlarm: () ==> ()
+    resolveAlarm() ==
+    (
+        status := <RESOLVED>;
+    );
+end Alarm
+
+class OperatorInterface
+instance variables
+    currentMachine: DialysisMachine;
+
+operations
+    public OperatorInterface: DialysisMachine ==> OperatorInterface
+    OperatorInterface(machine) ==
+    (
+        currentMachine := machine;
+    );
+
+    public adjustParameters: DialysisMachine`Parameters ==> ()
+    adjustParameters(p) ==
+    (
+        currentMachine.setParameters(p);
+    );
+
+    public checkAlarms: () ==> seq of char
+    checkAlarms() ==
+    (
+        return currentMachine.monitorParameters();
+    );
+
+    public resetSystem: () ==> ()
+    resetSystem() ==
+    (
+        currentMachine.resetMachine();
+    );
+end OperatorInterface
+
+class PatientManagement
+types
+    public Map = map Patient`PatientID to DialysisMachine`MachineID; -- Mapa de pacientes a máquinas
+
+instance variables
+    PatientDialysisMachineMap: Map;
+    patients: set of Patient`PatientID;
+    availableMachines: set of DialysisMachine`MachineID;
+
+operations
+    public PatientManagement: () ==> PatientManagement
+    PatientManagement() ==
+    (
+        PatientDialysisMachineMap := {|->};
+        patients := {};
+        availableMachines := {};
+    );
+
+    public addPatient: Patient`PatientID ==> ()
+    addPatient(pid) ==
+    (
+        patients := patients union {pid};
+    );
+
+    public assignDialysisMachine: Patient`PatientID * DialysisMachine`MachineID ==> ()
+    assignDialysisMachine(pid, mid) ==
+    (
+        PatientDialysisMachineMap(pid) := mid;
+        availableMachines := availableMachines \ {mid};
+    );
+
+end PatientManagement
